@@ -1,0 +1,47 @@
+name: Push to GitHub Registry
+
+on: push
+
+env:
+  IMAGE_NAME: postgis_pgvector
+  POSTGRESQL_MAJOR: 17
+  POSTGIS_MAJOR_MINOR: 3.5
+  PGVECTOR_GIT_TAG: v0.8.0
+  REGISTRY_USER: ${{ github.actor }}
+  REGISTRY_PASSWORD: ${{ github.token }}
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build Image
+      id: build-image
+      uses: redhat-actions/buildah-build@v2
+      with:
+        image: ${{ env.IMAGE_NAME }}
+        extra-args: |
+          --build-arg POSTGRESQL_MAJOR=${{ env.POSTGRESQL_MAJOR }}
+          --build-arg POSTGIS_MAJOR_MINOR=${{ env.POSTGIS_MAJOR_MINOR }}
+          --build-arg PGVECTOR_GIT_TAG=${{ env.PGVECTOR_GIT_TAG }}
+        tags: latest ${{ github.sha }} ${{ env.POSTGRESQL_MAJOR }}-${{ env.POSTGIS_MAJOR_MINOR }}-${{ env.PGVECTOR_GIT_TAG }}
+        labels: |
+          ${{ env.IMAGE_NAME }}:latest
+
+    - name: Publish Image
+      id: push-to-registry
+      uses: redhat-actions/push-to-registry@v2
+      with:
+        image: ${{ steps.build-image.outputs.image }}
+        tags: ${{ steps.build-image.outputs.tags }}
+        registry: ${{ env.REGISTRY }}
+        username: ${{ env.REGISTRY_USER }}
+        password: ${{ env.REGISTRY_PASSWORD }}
